@@ -1,0 +1,60 @@
+--- # Migrated from Jenkinsfile (scripted pipeline with parallel multi-node builds)
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Jenkins: parallel builders across node labels 'precise', 'trusty', 'windows'
+    name: Build (${{ matrix.label }})
+    runs-on: ${{ matrix.runs-on }}
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 'precise'/'trusty' were Ubuntu node labels; mapped to available Ubuntu runners
+          - label: precise
+            runs-on: ubuntu-22.04
+            shell: bash
+            build-command: make
+            test-command: make test
+          - label: trusty
+            runs-on: ubuntu-24.04
+            shell: bash
+            build-command: make
+            test-command: make test
+          - label: windows
+            runs-on: windows-latest
+            shell: cmd
+            build-command: build.bat
+            test-command: test.bat
+    steps:
+      # Jenkins: stage('Checkout') { checkout scm }
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      # Jenkins: stage('Build') { sh 'make' / bat 'build.bat' }
+      - name: Build
+        run: ${{ matrix.build-command }}
+
+      # Jenkins: stage('Test') { sh 'make test' / bat 'test.bat' }
+      - name: Test
+        run: ${{ matrix.test-command }}
+
+      # Jenkins: stage('Archive') { archiveArtifacts artifacts: 'build/**/*', fingerprint: true }
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: build-${{ matrix.label }}
+          path: build/**/*
+          if-no-files-found: error
